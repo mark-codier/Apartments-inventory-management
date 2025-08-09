@@ -5,17 +5,29 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { apartmentStandards, ApartmentType } from "@/lib/inventoryData";
 
+type Inventory = Record<string, number>;
+
+type ApartmentRow = {
+  id: string;
+  type: ApartmentType;
+  inventory: Inventory;
+};
+
 export default function ApartmentTable() {
-  const [apartments, setApartments] = useState<any[]>([]);
+  const [apartments, setApartments] = useState<ApartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchApartments = async () => {
       const snapshot = await getDocs(collection(db, "apartments"));
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const data: ApartmentRow[] = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data() as { type: ApartmentType; inventory?: Inventory };
+        return {
+          id: docSnap.id,
+          type: d.type,
+          inventory: d.inventory ?? {},
+        };
+      });
       setApartments(data);
       setLoading(false);
     };
@@ -23,7 +35,7 @@ export default function ApartmentTable() {
     fetchApartments();
   }, []);
 
-  const getStatus = (type: ApartmentType, inventory: Record<string, number>) => {
+  const getStatus = (type: ApartmentType, inventory: Inventory) => {
     const standard = apartmentStandards[type];
     let hasLess = false;
     let hasMore = false;
@@ -31,7 +43,6 @@ export default function ApartmentTable() {
     for (const item in standard) {
       const expected = standard[item];
       const actual = inventory[item] ?? 0;
-
       if (actual < expected) hasLess = true;
       if (actual > expected) hasMore = true;
     }

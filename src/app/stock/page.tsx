@@ -6,15 +6,18 @@ import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 
 type Inventory = Record<string, number>;
 
-function sumInventories(apartments: any[]): Inventory {
+type ApartmentDoc = {
+  inventory?: Inventory;
+};
+
+function sumInventories(apartments: ApartmentDoc[]): Inventory {
   const total: Inventory = {};
   for (const apt of apartments) {
     const inv = apt.inventory || {};
-    for(const key in inv) {
+    for (const key in inv) {
       total[key] = (total[key] || 0) + inv[key];
     }
   }
-  console.log(total)
   return total;
 }
 
@@ -27,13 +30,15 @@ export default function StockPage() {
   useEffect(() => {
     const fetchData = async () => {
       const aptSnap = await getDocs(collection(db, "apartments"));
-      const apartments = aptSnap.docs.map((doc) => doc.data());
+      const apartments: ApartmentDoc[] = aptSnap.docs.map((docSnap) => {
+        return docSnap.data() as ApartmentDoc;
+      });
       const usedInApts = sumInventories(apartments);
       setUsed(usedInApts);
 
       const storageSnap = await getDoc(doc(db, "storage", "main"));
       const storageData = storageSnap.exists()
-        ? storageSnap.data()
+        ? (storageSnap.data() as { inventory?: Inventory })
         : { inventory: {} };
       setStorage(storageData.inventory || {});
       setLoading(false);
@@ -84,7 +89,7 @@ export default function StockPage() {
                   className="w-24 px-2 py-1 border border-gray-300 rounded"
                 />
               </td>
-              <td className="px-4 py-2 border-b">{used[item]}</td>
+              <td className="px-4 py-2 border-b">{used[item] ?? 0}</td>
             </tr>
           ))}
         </tbody>
