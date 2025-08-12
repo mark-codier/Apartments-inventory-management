@@ -3,7 +3,14 @@ import { notFound } from "next/navigation";
 import ApartmentClient from "./ApartmentClient";
 import { ApartmentType } from "@/lib/inventoryData";
 
-const apartmentList: { id: string; type: ApartmentType }[] = [
+const apartmentList: {
+  id: string,
+  type: ApartmentType
+  description?: string,               // Beschreibung der Wohnung
+  notes?: string,                     // allgemeine Notiz (z. B. "Stromstörung")
+  itemNotes?: Record<string, string>, // Notiz pro Item (key = itemId)
+  appliancesStatus?: Record<string, { works: boolean; lastChecked: string; note?: string }>
+}[] = [
   { id: "11", type: "Deluxe" }, { id: "21", type: "Deluxe" }, { id: "31", type: "Deluxe" },
   { id: "41", type: "Deluxe" }, { id: "51", type: "Deluxe" },
   { id: "12", type: "Luxury" }, { id: "22", type: "Luxury" }, { id: "32", type: "Luxury" },
