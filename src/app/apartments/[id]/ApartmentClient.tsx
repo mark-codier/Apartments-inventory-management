@@ -3,16 +3,40 @@
 
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, collection, addDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { ApartmentType, Inventory, apartmentStandards } from "@/lib/inventoryData";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  addDoc,
+  getDocs,
+} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ApartmentType,
+  Inventory,
+  apartmentStandards,
+} from "@/lib/inventoryData";
+import type { Item } from "../../../lib/types/inventory"
+import { ItemMiniProfile } from '../../../Components/items/ItemMiniProfile'
 
 type ApplianceStatus = { works: boolean; lastChecked: string; note?: string };
 
 // Приборы (для переключателя "Funktioniert") — подгони под ключи стандарта, если нужно
-const applianceItems = new Set<string>(["Fernseher", "Klimaanlage", "Kühlschrank", "Safe"]);
+const applianceItems = new Set<string>([
+  "Fernseher",
+  "Klimaanlage",
+  "Kühlschrank",
+  "Safe",
+]);
 
-export default function ApartmentClient({ id, type }: { id: string; type: ApartmentType; }) {
+export default function ApartmentClient({
+  id,
+  type,
+}: {
+  id: string;
+  type: ApartmentType;
+}) {
   const router = useRouter();
   const standard = apartmentStandards[type];
 
@@ -23,47 +47,93 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
   const [description, setDescription] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
-  const [appliancesStatus, setAppliancesStatus] = useState<Record<string, ApplianceStatus>>({});
+  const [appliancesStatus, setAppliancesStatus] = useState<
+    Record<string, ApplianceStatus>
+  >({});
+
+  // Mini-Profil (ℹ️)
+  const [items, setItems] = useState<Item[]>([]);
+  const [openItem, setOpenItem] = useState<Item | null>(null);
+  const itemByName = useMemo(
+    () => new Map(items.map((i) => [i.name, i])),
+    [items]
+  );
 
   useEffect(() => {
     let alive = true;
     (async () => {
+      // apartment laden
       const ref = doc(db, "apartments", id);
       const snap = await getDoc(ref);
       const d = snap.data() ?? {};
 
-      const inv = snap.exists() ? (d.inventory as Inventory) : ({ ...standard } as Inventory);
+      const inv = snap.exists()
+        ? (d.inventory as Inventory)
+        : ({ ...standard } as Inventory);
+
+      // items laden (für Mini-Profile)
+      const itemsSnap = await getDocs(collection(db, "items"));
+      const list = itemsSnap.docs.map((d) => d.data() as Item);
 
       if (alive) {
         setCurrent(inv);
         setDescription((d.description as string) ?? "");
         setNotes((d.notes as string) ?? "");
         setItemNotes((d.itemNotes as Record<string, string>) ?? {});
-        setAppliancesStatus((d.appliancesStatus as Record<string, ApplianceStatus>) ?? {});
+        setAppliancesStatus(
+          (d.appliancesStatus as Record<string, ApplianceStatus>) ?? {}
+        );
+        setItems(list);
         setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [id, standard]);
 
   // Partial upsert
   const upsertApartment = async (partial: object) => {
-    await setDoc(doc(db, "apartments", id), { ...partial, updatedAt: new Date().toISOString() }, { merge: true });
+    await setDoc(
+      doc(db, "apartments", id),
+      { ...partial, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
   };
 
-  const handleChange = (item: string, value: string) => {
-    setCurrent((prev) => ({ ...(prev ?? {}), [item]: Number.parseInt(value) || 0 }));
+  const handleChange = (itemName: string, value: string) => {
+    setCurrent((prev) => ({
+      ...(prev ?? {}),
+      [itemName]: Number.parseInt(value) || 0,
+    }));
   };
 
-  const saveApartmentNote = async (text: string) => { setNotes(text); await upsertApartment({ notes: text }); };
-  const saveApartmentDescription = async (text: string) => { setDescription(text); await upsertApartment({ description: text }); };
-  const saveItemNote = async (itemId: string, text: string) => {
-    const next = { ...(itemNotes ?? {}), [itemId]: text };
+  const saveApartmentNote = async (text: string) => {
+    setNotes(text);
+    await upsertApartment({ notes: text });
+  };
+  const saveApartmentDescription = async (text: string) => {
+    setDescription(text);
+    await upsertApartment({ description: text });
+  };
+  const saveItemNote = async (itemIdOrName: string, text: string) => {
+    const next = { ...(itemNotes ?? {}), [itemIdOrName]: text };
     setItemNotes(next);
     await upsertApartment({ itemNotes: next });
   };
-  const setApplianceWorks = async (itemId: string, works: boolean, note?: string) => {
-    const next = { ...(appliancesStatus ?? {}), [itemId]: { works, lastChecked: new Date().toISOString(), ...(note ? { note } : {}) } };
+  const setApplianceWorks = async (
+    itemName: string,
+    works: boolean,
+    note?: string
+  ) => {
+    const next = {
+      ...(appliancesStatus ?? {}),
+      [itemName]: {
+        works,
+        lastChecked: new Date().toISOString(),
+        ...(note ? { note } : {}),
+      },
+    };
     setAppliancesStatus(next);
     await upsertApartment({ appliancesStatus: next });
   };
@@ -82,16 +152,20 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
         if (before !== after) changes[key] = { before, after };
       }
 
-      await setDoc(ref, {
-        name: "Victoria Apartments",
-        type,
-        inventory: current,
-        description,
-        notes,
-        itemNotes,
-        appliancesStatus,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      await setDoc(
+        ref,
+        {
+          name: "Victoria Apartments",
+          type,
+          inventory: current,
+          description,
+          notes,
+          itemNotes,
+          appliancesStatus,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
 
       if (Object.keys(changes).length > 0) {
         await addDoc(collection(db, "logs"), {
@@ -116,12 +190,16 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
 
   return (
     <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Kontrolle: Victoria Apartments Nr. {id}</h1>
+      <h1 className="text-2xl font-bold mb-4">
+        Kontrolle: Victoria Apartments Nr. {id}
+      </h1>
 
       {/* Beschreibung & Gesamt-Notiz */}
       <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium mb-1">Wohnungsbeschreibung</label>
+          <label className="block text-sm font-medium mb-1">
+            Wohnungsbeschreibung
+          </label>
           <textarea
             className="w-full border rounded px-3 py-2"
             placeholder="z. B. Lage, Besonderheiten …"
@@ -132,7 +210,9 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Wohnungsnotiz</label>
+          <label className="block text-sm font-medium mb-1">
+            Wohnungsnotiz
+          </label>
           <textarea
             className="w-full border rounded px-3 py-2"
             placeholder="z. B. Strom ist vorübergehend außer Betrieb"
@@ -149,39 +229,65 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
         <div>
           <h2 className="text-lg font-semibold mb-2">📦 Aktueller Bestand</h2>
           <ul className="space-y-3">
-            {Object.entries(standard).map(([item, expected]) => {
-              const actual = current?.[item] ?? 0;
+            {Object.entries(standard).map(([itemName, expected]) => {
+              const actual = current?.[itemName] ?? 0;
               const expectedNum = expected as number;
 
               let borderColor = "border-gray-300";
               if (actual < expectedNum) borderColor = "border-red-500";
               else if (actual > expectedNum) borderColor = "border-yellow-500";
 
-              const isAppliance = applianceItems.has(item);
-              const works = appliancesStatus[item]?.works ?? false;
+              const isAppliance = applianceItems.has(itemName);
+              const works = appliancesStatus[itemName]?.works ?? false;
+
+              const catalogItem = itemByName.get(itemName) ?? null;
 
               return (
-                <li key={item} className="flex flex-col gap-1">
+                <li key={itemName} className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <label className="w-48">{item}</label>
+                    <label className="w-48 flex items-center gap-2">
+                      <span>{itemName}</span>
+                      {catalogItem && (
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 underline"
+                          onClick={() => setOpenItem(catalogItem)}
+                          aria-label={`${itemName} Info`}
+                          title="Info"
+                        >
+                          Info
+                        </button>
+                      )}
+                    </label>
+
                     <input
                       type="number"
                       value={actual}
-                      onChange={(e) => handleChange(item, e.target.value)}
+                      onChange={(e) => handleChange(itemName, e.target.value)}
                       className={`w-24 px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all
                         border ${borderColor}
-                        ${borderColor === "border-red-500" ? "bg-red-50" : ""}
-                        ${borderColor === "border-yellow-500" ? "bg-yellow-50" : ""}
+                        ${
+                          borderColor === "border-red-500" ? "bg-red-50" : ""
+                        }
+                        ${
+                          borderColor === "border-yellow-500"
+                            ? "bg-yellow-50"
+                            : ""
+                        }
                       `}
                     />
-                    <span className="text-sm text-gray-500">Soll: {expectedNum}</span>
+                    <span className="text-sm text-gray-500">
+                      Soll: {expectedNum}
+                    </span>
 
                     {isAppliance && (
                       <label className="ml-3 inline-flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={works}
-                          onChange={(e) => setApplianceWorks(item, e.target.checked)}
+                          onChange={(e) =>
+                            setApplianceWorks(itemName, e.target.checked)
+                          }
                         />
                         Funktioniert
                       </label>
@@ -193,9 +299,11 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
                     <input
                       className="w-full md:w-80 border rounded px-2 py-1 text-sm"
                       placeholder="Notiz zum Artikel (optional)"
-                      value={itemNotes[item] ?? ""}
-                      onChange={(e) => setItemNotes({ ...itemNotes, [item]: e.target.value })}
-                      onBlur={(e) => saveItemNote(item, e.target.value)}
+                      value={itemNotes[itemName] ?? ""}
+                      onChange={(e) =>
+                        setItemNotes({ ...itemNotes, [itemName]: e.target.value })
+                      }
+                      onBlur={(e) => saveItemNote(itemName, e.target.value)}
                     />
                   </div>
                 </li>
@@ -203,12 +311,21 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
             })}
           </ul>
 
-          <button onClick={handleSave} className="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          <button
+            onClick={handleSave}
+            className="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
             Speichern
           </button>
         </div>
-        {/* Rechts — Standard */}
+
+        {/* Rechts — Standard (optional – позже можно вернуть сводку) */}
       </div>
+
+      {/* Mini-Profil Overlay */}
+      {openItem && (
+        <ItemMiniProfile item={openItem} onClose={() => setOpenItem(null)} />
+      )}
     </main>
   );
 }
