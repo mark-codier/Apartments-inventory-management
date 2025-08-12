@@ -207,16 +207,7 @@ export default function ApartmentClient({ id, type }: { id: string; type: Apartm
             Speichern
           </button>
         </div>
-
         {/* Rechts — Standard */}
-        <div>
-          <h2 className="text-lg font-semibold mb-2">✅ Soll-Bestand ({type})</h2>
-          <ul className="list-disc list-inside space-y-1">
-            {Object.entries(standard).map(([item, count]) => (
-              <li key={item}>{item}: {count as number}</li>
-            ))}
-          </ul>
-        </div>
       </div>
     </main>
   );
