@@ -1,4 +1,4 @@
-// src/app/apartments/[id]/page.tsx
+// НИКАКОГО "use client"
 import { notFound } from "next/navigation";
 import ApartmentClient from "./ApartmentClient";
 import { ApartmentType } from "@/lib/inventoryData";

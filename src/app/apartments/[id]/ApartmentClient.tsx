@@ -3,12 +3,8 @@
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, collection, addDoc } from "firebase/firestore";
-import { useState, useEffect } from "react";
-import {
-  apartmentStandards,
-  ApartmentType,
-  Inventory,
-} from "@/lib/inventoryData";
+import { useEffect, useState } from "react";
+import { ApartmentType, Inventory, apartmentStandards } from "@/lib/inventoryData";
 
 export default function ApartmentClient({
   id,
@@ -18,7 +14,6 @@ export default function ApartmentClient({
   type: ApartmentType;
 }) {
   const router = useRouter();
-
   const standard = apartmentStandards[type];
 
   const [current, setCurrent] = useState<Inventory | null>(null);
@@ -28,36 +23,32 @@ export default function ApartmentClient({
     let alive = true;
     (async () => {
       const ref = doc(db, "apartments", id);
-      const snapshot = await getDoc(ref);
-
-      const next = snapshot.exists()
-        ? (snapshot.data().inventory as Inventory)
+      const snap = await getDoc(ref);
+      const data = snap.exists()
+        ? (snap.data().inventory as Inventory)
         : ({ ...standard } as Inventory);
-
       if (alive) {
-        setCurrent(next);
+        setCurrent(data);
         setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [id, standard]);
 
   const handleChange = (item: string, value: string) => {
-    setCurrent((prev) => ({ ...(prev ?? {}), [item]: parseInt(value) || 0 }));
+    setCurrent((prev) => ({ ...(prev ?? {}), [item]: Number.parseInt(value) || 0 }));
   };
 
   const handleSave = async () => {
     try {
       if (!current) return;
       const ref = doc(db, "apartments", id);
-      const prevDoc = await getDoc(ref);
-      const prevData = (prevDoc.data()?.inventory as Inventory) ?? {};
+      const prev = await getDoc(ref);
+      const prevInv = (prev.data()?.inventory as Inventory) ?? {};
 
       const changes: Record<string, { before: number; after: number }> = {};
       for (const key of Object.keys(current)) {
-        const before = prevData[key] ?? 0;
+        const before = prevInv[key] ?? 0;
         const after = current[key] ?? 0;
         if (before !== after) changes[key] = { before, after };
       }
@@ -82,8 +73,8 @@ export default function ApartmentClient({
 
       alert("✅ Inventar wurde gespeichert!");
       router.push("/apartments");
-    } catch (error) {
-      console.error("Fehler beim Speichern:", error);
+    } catch (e) {
+      console.error(e);
       alert("❌ Fehler beim Speichern des Inventars");
     }
   };
@@ -92,12 +83,9 @@ export default function ApartmentClient({
 
   return (
     <main className="p-6">
-      <h1 className="text-2xl font-bold mb-6">
-        Kontrolle: Victoria Apartments Nr. {id}
-      </h1>
+      <h1 className="text-2xl font-bold mb-6">Kontrolle: Victoria Apartments Nr. {id}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Links — editierbar */}
         <div>
           <h2 className="text-lg font-semibold mb-2">📦 Aktueller Bestand</h2>
           <ul className="space-y-3">
@@ -134,14 +122,11 @@ export default function ApartmentClient({
           </button>
         </div>
 
-        {/* Rechts — Standard */}
         <div>
           <h2 className="text-lg font-semibold mb-2">✅ Soll-Bestand ({type})</h2>
           <ul className="list-disc list-inside space-y-1">
             {Object.entries(standard).map(([item, count]) => (
-              <li key={item}>
-                {item}: {count as number}
-              </li>
+              <li key={item}>{item}: {count as number}</li>
             ))}
           </ul>
         </div>
