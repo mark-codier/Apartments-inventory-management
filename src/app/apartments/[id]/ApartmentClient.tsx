@@ -17,12 +17,12 @@ import {
   Inventory,
   apartmentStandards,
 } from "@/lib/inventoryData";
-import type { Item } from "../../../lib/types/inventory"
-import { ItemMiniProfile } from '../../../Components/items/ItemMiniProfile'
+import type { Item } from "../../../lib/types/inventory";
+import { ItemMiniProfile } from "../../../Components/items/ItemMiniProfile";
 
 type ApplianceStatus = { works: boolean; lastChecked: string; note?: string };
 
-// Приборы (для переключателя "Funktioniert") — подгони под ключи стандарта, если нужно
+// Geräte-Liste für den „Funktioniert“-Schalter (bei Bedarf anpassen)
 const applianceItems = new Set<string>([
   "Fernseher",
   "Klimaanlage",
@@ -190,9 +190,21 @@ export default function ApartmentClient({
 
   return (
     <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">
-        Kontrolle: Victoria Apartments Nr. {id}
-      </h1>
+      {/* Header mit „Inventur starten“ */}
+      <header className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <h1 className="text-2xl font-bold">
+          Kontrolle: Victoria Apartments Nr. {id}
+        </h1>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => router.push(`/apartments/${id}/inventur`)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Inventur starten
+          </button>
+        </div>
+      </header>
 
       {/* Beschreibung & Gesamt-Notiz */}
       <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -301,7 +313,10 @@ export default function ApartmentClient({
                       placeholder="Notiz zum Artikel (optional)"
                       value={itemNotes[itemName] ?? ""}
                       onChange={(e) =>
-                        setItemNotes({ ...itemNotes, [itemName]: e.target.value })
+                        setItemNotes({
+                          ...itemNotes,
+                          [itemName]: e.target.value,
+                        })
                       }
                       onBlur={(e) => saveItemNote(itemName, e.target.value)}
                     />
@@ -319,7 +334,7 @@ export default function ApartmentClient({
           </button>
         </div>
 
-        {/* Rechts — Standard (optional – позже можно вернуть сводку) */}
+        {/* Rechts — (optional) spätere Zusammenfassung */}
       </div>
 
       {/* Mini-Profil Overlay */}
